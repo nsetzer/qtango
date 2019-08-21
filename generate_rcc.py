@@ -33,16 +33,17 @@ def create_qrc(themefilepath, exts=['.png', '.svg']):
     # Parse index.theme
     parser = configparser.ConfigParser()
     parser.read(themefilepath)
-    name = parser.get('Icon Theme', 'Name')
+    theme_name = parser.get('Icon Theme', 'Name')
     directories = parser.get('Icon Theme', 'Directories').split(',')
 
     # Create root
     root = etree.Element('RCC', version='1.0')
-    element_qresource = etree.SubElement(root, 'qresource',
-                                         prefix='icons/%s' % name)
+    prefix='icons/%s' % theme_name
+    element_qresource = etree.SubElement(root, 'qresource', prefix=prefix)
 
     element = etree.SubElement(element_qresource, 'file', alias='index.theme')
-    element.text = os.path.abspath(themefilepath)
+    #element.text = os.path.abspath(themefilepath)
+    element.text = themefilepath[len(prefix)+1:]
 
     # Find all image files
     for directory in directories:
@@ -51,21 +52,35 @@ def create_qrc(themefilepath, exts=['.png', '.svg']):
                 if os.path.splitext(filename)[1] not in exts:
                     continue
                 alias = os.path.join(directory, filename)
-                text = os.path.abspath(os.path.join(dirpath, filename))
-                element = etree.SubElement(element_qresource, 'file', alias=alias)
+                #text = os.path.abspath(os.path.join(dirpath, filename))
+                text = os.path.join(dirpath, filename)[len(prefix)+1:]
+                element = etree.Element('file', alias=alias)
                 element.text = text
+                element_qresource.append(element)
 
     # Write
-    outfilepath = os.path.join(basepath, name + '.qrc')
+    outfilepath = os.path.join(basepath, theme_name + '.qrc')
     with open(outfilepath, 'w') as fp:
         fp.write(minidom.parseString(etree.tostring(root)).toprettyxml())
 
     return outfilepath
 
+def convert_qrc(qrcfilepath):
+
+    # remove first line <?xml version="1.0" ?>
+    with open(qrcfilepath, "r") as rf:
+        print(rf.readline())
+        lines = [line for line in rf]
+
+    with open(qrcfilepath, "w") as wf:
+        for line in lines:
+            wf.write(line)
+
 def run_rcc(qrcfilepath):
-    outfilepath = os.path.splitext(qrcfilepath)[0] + '.rcc'
-    subprocess.check_call(['rcc', '--binary', '-o', outfilepath,
-                           '--compress', '9', qrcfilepath])
+    outfilepath = os.path.splitext(qrcfilepath)[0] + '.py'
+    args = ['pyrcc5', '-o', outfilepath, '-compress', '9', qrcfilepath]
+    print(" ".join(args))
+    subprocess.check_call(args)
 
 def run():
     parser = argparse.ArgumentParser(description='Generate rcc')
@@ -74,6 +89,8 @@ def run():
     args = parser.parse_args()
 
     qrcfilepath = create_qrc(args.theme)
+    print(qrcfilepath)
+    convert_qrc(qrcfilepath)
     run_rcc(qrcfilepath)
 
 if __name__ == '__main__':
